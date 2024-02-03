@@ -26,10 +26,8 @@ public class BatchJobController {
     public static final String TEMP_STORAGE_PATH = "E:\\batch-files\\tmp";
     @Autowired
     private JobLauncher jobLauncher;
-
     @Autowired
     private Job job;
-
     @Autowired
     private CustomerRepository repository;
     @Autowired
@@ -49,7 +47,7 @@ public class BatchJobController {
                     .addString("fullPathFileName", TEMP_STORAGE + originalFileName)
                     .addLong("startAt", System.currentTimeMillis()).toJobParameters();
 
-            JobExecution execution = jobLauncher.run(job, jobParameters);
+            jobLauncher.run(job, jobParameters);
 
         } catch (JobExecutionAlreadyRunningException | JobRestartException | JobInstanceAlreadyCompleteException |
                  JobParametersInvalidException | IOException e) {

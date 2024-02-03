@@ -6,7 +6,7 @@ import org.springframework.batch.core.step.skip.SkipPolicy;
 public class ExceptionSkipPolicy implements SkipPolicy {
 
     @Override
-    public boolean shouldSkip(Throwable throwable, int i) throws SkipLimitExceededException {
-        return throwable instanceof NumberFormatException ;
+    public boolean shouldSkip(Throwable t, long skipCount) throws SkipLimitExceededException {
+        return t instanceof NumberFormatException ;
     }
 }

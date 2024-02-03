@@ -8,9 +8,10 @@ import org.springframework.batch.core.Job;
 import org.springframework.batch.core.SkipListener;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
-import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
-import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.skip.SkipPolicy;
 import org.springframework.batch.item.data.RepositoryItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -24,23 +25,16 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.io.File;
 
 @Configuration
-@EnableBatchProcessing
 @AllArgsConstructor
 public class SpringBatchConfig {
 
-    private JobBuilderFactory jobBuilderFactory;
-
-    private StepBuilderFactory stepBuilderFactory;
-
     private CustomerRepository customerRepository;
-
     private CustomerItemWriter customerItemWriter;
-
-
     @Bean
     @StepScope
     public FlatFileItemReader<Customer> itemReader(@Value("#{jobParameters[fullPathFileName]}") String pathToFIle) {
@@ -84,8 +78,8 @@ public class SpringBatchConfig {
 
 
     @Bean
-    public Step step1(FlatFileItemReader<Customer> itemReader) {
-        return stepBuilderFactory.get("slaveStep").<Customer, Customer>chunk(10)
+    public Step step1(FlatFileItemReader<Customer> itemReader, JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+        return new StepBuilder("slaveStep", jobRepository).<Customer, Customer>chunk(10, platformTransactionManager)
                 .reader(itemReader)
                 .processor(processor())
                 .writer(customerItemWriter)
@@ -97,10 +91,9 @@ public class SpringBatchConfig {
     }
 
     @Bean
-    public Job runJob(FlatFileItemReader<Customer> itemReader) {
-        return jobBuilderFactory.get("importCustomer").flow(step1(itemReader)).end().build();
+    public Job runJob(FlatFileItemReader<Customer> itemReader, JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+        return new JobBuilder("importCustomer", jobRepository).flow(step1(itemReader, jobRepository, platformTransactionManager)).end().build();
     }
-
 
     @Bean
     public SkipPolicy skipPolicy() {
