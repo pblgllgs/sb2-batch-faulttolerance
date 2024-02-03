@@ -10,6 +10,7 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.step.skip.SkipPolicy;
 import org.springframework.batch.item.data.RepositoryItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -17,9 +18,14 @@ import org.springframework.batch.item.file.LineMapper;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
+
+import java.io.File;
 
 @Configuration
 @EnableBatchProcessing
@@ -36,9 +42,10 @@ public class SpringBatchConfig {
 
 
     @Bean
-    public FlatFileItemReader<Customer> itemReader() {
+    @StepScope
+    public FlatFileItemReader<Customer> itemReader(@Value("#{jobParameters[fullPathFileName]}") String pathToFIle) {
         FlatFileItemReader<Customer> flatFileItemReader = new FlatFileItemReader<>();
-        flatFileItemReader.setResource(new FileSystemResource("src/main/resources/customers.csv"));
+        flatFileItemReader.setResource(new FileSystemResource(new File(pathToFIle)));
         flatFileItemReader.setName("CSV-Reader");
         flatFileItemReader.setLinesToSkip(1);
         flatFileItemReader.setLineMapper(lineMapper());
@@ -77,24 +84,21 @@ public class SpringBatchConfig {
 
 
     @Bean
-    public Step step1() {
-        return stepBuilderFactory.get("slaveStep").<Customer, Customer>chunk(5)
-                .reader(itemReader())
+    public Step step1(FlatFileItemReader<Customer> itemReader) {
+        return stepBuilderFactory.get("slaveStep").<Customer, Customer>chunk(10)
+                .reader(itemReader)
                 .processor(processor())
                 .writer(customerItemWriter)
                 .faultTolerant()
-                //.skipLimit(100)
-                //.skip(NumberFormatException.class)
-                //.noSkip(IllegalArgumentException.class)
                 .listener(skipListener())
                 .skipPolicy(skipPolicy())
+                .taskExecutor(taskExecutor())
                 .build();
     }
 
-
     @Bean
-    public Job runJob() {
-        return jobBuilderFactory.get("importCustomer").flow(step1()).end().build();
+    public Job runJob(FlatFileItemReader<Customer> itemReader) {
+        return jobBuilderFactory.get("importCustomer").flow(step1(itemReader)).end().build();
     }
 
 
@@ -106,6 +110,14 @@ public class SpringBatchConfig {
     @Bean
     public SkipListener skipListener() {
         return new StepSkipListener();
+    }
+
+    @Bean
+    public TaskExecutor taskExecutor() {
+        SimpleAsyncTaskExecutor
+                taskExecutor = new SimpleAsyncTaskExecutor();
+        taskExecutor.setConcurrencyLimit(10);
+        return taskExecutor;
     }
 
 
